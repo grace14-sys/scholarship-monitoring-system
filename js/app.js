@@ -83,6 +83,7 @@ db = window.supabase.createClient(
   window.APP_CONFIG.supabaseAnonKey
 );
 
-// Load current user
 loadUser();
+
+})();
 
