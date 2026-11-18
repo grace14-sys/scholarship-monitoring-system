@@ -40,5 +40,49 @@ async function verify(id){if(!staff())return;if(!confirm('Verify this submission
 function compliancePage(){let verified=submissions.filter(s=>s.submission_status==='Verified');$('pageContent').innerHTML=`<p class="muted">Final evaluations are generated only after authorized verification.</p><div class="card"><div class="toolbar"><input id="complianceSearch" placeholder="Search scholar..."><select id="complianceFilter"><option value="">All results</option><option>Compliant</option><option>With Deficiency</option></select></div><div id="complianceRows"></div></div>`;function draw(){let q=$('complianceSearch').value.toLowerCase(),st=$('complianceFilter').value,items=verified.filter(s=>(s.scholars?.full_name||'').toLowerCase().includes(q)||(s.scholars?.student_id||'').toLowerCase().includes(q)).filter(s=>!st||s.evaluation===st);$('complianceRows').innerHTML=items.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Scholar</th><th>Program</th><th>Term</th><th>GWA</th><th>Result</th><th>Deficiencies</th></tr></thead><tbody>${items.map(s=>`<tr><td>${esc(s.scholars?.full_name)}</td><td>${esc(s.scholars?.scholarship_programs?.program_name)}</td><td>${esc(s.academic_year)} / ${esc(s.semester)}</td><td>${s.gwa}</td><td>${status(s.evaluation)}</td><td>${esc(s.deficiency_notes||'None')}</td></tr>`).join('')}</tbody></table></div>`:empty('No verified evaluations match your search.')}['complianceSearch','complianceFilter'].forEach(id=>$(id).oninput=draw);draw();}
 $('nav').querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>setPage(b.dataset.page));$('logout').onclick=async()=>{await db.auth.signOut();showAuth()};$('authToggle').onclick=()=>{signup=!signup;$('authTitle').textContent=signup?'Create scholar account':'Sign in to your account';$('nameField').classList.toggle('hidden',!signup);$('signupName').required=signup;$('authSubmit').textContent=signup?'Create account':'Sign in';$('authSwitchText').textContent=signup?'Already have an account?':"Don't have an account?";$('authToggle').textContent=signup?'Sign in':'Create account'};
 $('authForm').onsubmit=async e=>{e.preventDefault();if(!db)return error(Error('Configure js/config.js first'));let btn=$('authSubmit');btn.disabled=true;try{let email=$('email').value.trim(),password=$('password').value;if(signup){let r=await db.auth.signUp({email,password,options:{data:{full_name:$('signupName').value.trim()}}});if(r.error)throw r.error;toast(r.data.session?'Account created':'Account created. Confirm your email if email confirmation is enabled.');if(r.data.session)await loadUser();else $('authToggle').click()}else{let r=await db.auth.signInWithPassword({email,password});if(r.error)throw r.error;await loadUser()}}catch(e){error(e)}finally{btn.disabled=false}};
-if(!window.APP_CONFIG?.supabaseUrl?.startsWith('https://')||!window.APP_CONFIG?.supabaseAnonKey||window.APP_CONFIG.supabaseAnonKey.startsWith('YOUR_')){$('setupHint').classList.remove('hidden');$('authSubmit').disabled=true;return}if(!window.supabase){$('setupHint').classList.remove('hidden');$('setupHint').textContent='Supabase library could not load. Check your internet connection.';return}db=window.supabase.createClient(window.APP_CONFIG.supabaseUrl,window.APP_CONFIG.supabaseAnonKey);loadUser();
-})();
+
+// Validate Supabase configuration
+if (
+  !window.APP_CONFIG?.supabaseUrl ||
+  !window.APP_CONFIG?.supabaseAnonKey ||
+  window.APP_CONFIG.supabaseAnonKey.startsWith('YOUR_')
+) {
+  $('setupHint').classList.remove('hidden');
+  $('authSubmit').disabled = true;
+  return;
+}
+
+// Check Supabase library
+if (!window.supabase) {
+  $('setupHint').classList.remove('hidden');
+  $('setupHint').textContent =
+    'Supabase library could not load. Check your internet connection.';
+  return;
+}
+
+// Clean the Supabase URL
+const supabaseUrl = window.APP_CONFIG.supabaseUrl
+  .trim()
+  .replace(/\/rest\/v1\/?$/i, '')
+  .replace(/\/+$/, '');
+
+// Check URL format
+if (!supabaseUrl.startsWith('https://') ||
+    !supabaseUrl.endsWith('.supabase.co')) {
+  $('setupHint').classList.remove('hidden');
+  $('setupHint').textContent = 'Invalid Supabase project URL.';
+  $('authSubmit').disabled = true;
+  return;
+}
+
+// Initialize Supabase client
+console.log('Supabase URL loaded:', supabaseUrl);
+
+db = window.supabase.createClient(
+  supabaseUrl,
+  window.APP_CONFIG.supabaseAnonKey
+);
+
+// Load current user
+loadUser();
+
