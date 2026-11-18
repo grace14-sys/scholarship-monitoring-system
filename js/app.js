@@ -14,14 +14,14 @@ const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({
 
 const status = v => `<span class="status ${esc(String(v || '').toLowerCase().replaceAll(' ', '-'))}">${esc(v || '—')}</span>`;
 
-let db = null, user = null, profile = null, page = 'dashboard';
-let programs = [], scholars = [], submissions = [], signup = false;
+let db = null, user = null, profile = null;
+let page = 'dashboard', programs = [], scholars = [], submissions = [], signup = false;
 
 const staff = () => ['admin', 'staff'].includes(profile?.role);
 const admin = () => profile?.role === 'admin';
 
 const toast = (msg, error = false) => {
-  let t = $('toast');
+  const t = $('toast');
   t.textContent = msg;
   t.className = error ? 'error' : '';
   t.style.display = 'block';
@@ -30,15 +30,19 @@ const toast = (msg, error = false) => {
 };
 
 const error = e => toast(e?.message || String(e), true);
-const get = (form, name) => new FormData(form).get(name)?.toString().trim() || '';
 
-const opt = (items, selected = '') => items.map(([id, label]) =>
-  `<option value="${esc(id)}" ${id === selected ? 'selected' : ''}>${esc(label)}</option>`
-).join('');
+const get = (form, name) =>
+  new FormData(form).get(name)?.toString().trim() || '';
+
+const opt = (items, selected = '') =>
+  items.map(([id, label]) =>
+    `<option value="${esc(id)}" ${id === selected ? 'selected' : ''}>${esc(label)}</option>`
+  ).join('');
 
 const programOptions = (selected = '') =>
   '<option value="">Select scholarship</option>' +
-  opt(programs.filter(p => p.active || p.id === selected).map(p => [p.id, p.program_name]), selected);
+  opt(programs.filter(p => p.active || p.id === selected)
+    .map(p => [p.id, p.program_name]), selected);
 
 const scholarOptions = () =>
   '<option value="">Select scholar</option>' +
@@ -64,23 +68,26 @@ const setPage = async next => {
 
 async function refresh() {
   try {
-    let [p, s, g] = await Promise.all([
+    const [p, s, g] = await Promise.all([
       db.from('scholarship_programs').select('*').order('program_name'),
       db.from('scholars').select('*,scholarship_programs(program_name)').order('created_at', { ascending: false }),
-      db.from('grade_submissions').select('*,scholars(student_id,full_name,scholarship_programs(program_name))').order('submitted_at', { ascending: false })
+      db.from('grade_submissions')
+        .select('*,scholars(student_id,full_name,scholarship_programs(program_name))')
+        .order('submitted_at', { ascending: false })
     ]);
 
-    for (let r of [p, s, g]) {
+    for (const r of [p, s, g]) {
       if (r.error) throw r.error;
     }
 
-    programs = p.data;
-    scholars = s.data;
-    submissions = g.data;
+    programs = p.data || [];
+    scholars = s.data || [];
+    submissions = g.data || [];
     render();
   } catch (e) {
     error(e);
-    $('pageContent').innerHTML = empty('Unable to load data. Check your Supabase setup and permissions.');
+    $('pageContent').innerHTML =
+      empty('Unable to load data. Check your Supabase setup and permissions.');
   }
 }
 
@@ -100,7 +107,8 @@ function showApp() {
   $('rolePill').textContent = (profile?.role || 'scholar').toUpperCase();
 
   $('sideIdentity').innerHTML =
-    `<b>${esc(profile?.full_name || user.email)}</b><div class="subtext">${esc(user.email)}</div>`;
+    `<b>${esc(profile?.full_name || user.email)}</b>
+     <div class="subtext">${esc(user.email)}</div>`;
 
   document.querySelector('[data-page="scholars"]').style.display = staff() ? '' : 'none';
   document.querySelector('[data-page="programs"]').style.display = staff() ? '' : 'none';
@@ -115,7 +123,7 @@ function showAuth() {
 }
 
 async function loadUser() {
-  let { data: { user: u }, error: e } = await db.auth.getUser();
+  const { data: { user: u }, error: e } = await db.auth.getUser();
 
   if (e || !u) {
     showAuth();
@@ -124,7 +132,7 @@ async function loadUser() {
 
   user = u;
 
-  let r = await db.from('profiles').select('*').eq('id', u.id).single();
+  const r = await db.from('profiles').select('*').eq('id', u.id).single();
 
   if (r.error) {
     error('Your profile is missing. Check the signup trigger.');
@@ -138,12 +146,12 @@ async function loadUser() {
 }
 
 function dashboard() {
-  let pending = submissions.filter(s => s.submission_status === 'Pending').length;
-  let verified = submissions.filter(s => s.submission_status === 'Verified').length;
-  let compliant = scholars.filter(s => s.status === 'Compliant').length;
-  let deficient = scholars.filter(s => s.status === 'With Deficiency').length;
+  const pending = submissions.filter(s => s.submission_status === 'Pending').length;
+  const verified = submissions.filter(s => s.submission_status === 'Verified').length;
+  const compliant = scholars.filter(s => s.status === 'Compliant').length;
+  const deficient = scholars.filter(s => s.status === 'With Deficiency').length;
 
-  let cards = [
+  const cards = [
     ['♙', 'Total Scholars', scholars.length],
     ['◷', 'Pending Submissions', pending],
     ['✓', 'Verified Submissions', verified],
@@ -154,13 +162,13 @@ function dashboard() {
   $('pageContent').innerHTML = `
     <p class="muted">Overview of your scholarship monitoring workspace.</p>
     <div class="stats">
-      ${cards.map(([i, l, v]) => `
-        <div class="stat">
+      ${cards.map(([i, l, v]) =>
+        `<div class="stat">
           <div class="icon">${i}</div>
           <div class="number">${v}</div>
           <div class="caption">${l}</div>
-        </div>
-      `).join('')}
+        </div>`
+      ).join('')}
     </div>
     <div class="grid-2">
       <section class="card">
@@ -177,10 +185,11 @@ function dashboard() {
         <div class="rule"><b>03 · Verify & evaluate</b><span>Staff verifies and the database checks the program rules.</span></div>
         <div class="rule"><b>04 · Monitor status</b><span>View compliant scholars and deficiencies here.</span></div>
       </section>
-    </div>
-  `;
+    </div>`;
 
-  $('pageContent').querySelector('[data-go]')?.addEventListener('click', () => setPage('submissions'));
+  $('pageContent').querySelector('[data-go]')?.addEventListener('click', () =>
+    setPage('submissions')
+  );
 }
 
 function scholarPage() {
@@ -200,12 +209,15 @@ function scholarPage() {
         </select>
         <select id="statusFilter">
           <option value="">All statuses</option>
-          ${opt(['Active', 'Pending Submission', 'For Verification', 'Compliant', 'With Deficiency', 'Probationary', 'For Renewal', 'Renewed', 'Disqualified'].map(s => [s, s]))}
+          ${opt([
+            'Active', 'Pending Submission', 'For Verification', 'Compliant',
+            'With Deficiency', 'Probationary', 'For Renewal', 'Renewed',
+            'Disqualified'
+          ].map(s => [s, s]))}
         </select>
       </div>
       <div id="scholarRows"></div>
-    </div>
-  `;
+    </div>`;
 
   $('addScholar').onclick = () => scholarModal();
 
@@ -217,40 +229,39 @@ function scholarPage() {
 }
 
 function filterScholars() {
-  let q = $('scholarSearch').value.toLowerCase();
-  let p = $('scholarFilter').value;
-  let st = $('statusFilter').value;
+  const q = $('scholarSearch').value.toLowerCase();
+  const p = $('scholarFilter').value;
+  const st = $('statusFilter').value;
 
-  let items = scholars.filter(s =>
-    (s.full_name.toLowerCase().includes(q) || s.student_id.toLowerCase().includes(q)) &&
-    (!p || s.scholarship_id === p) &&
-    (!st || s.status === st)
-  );
+  const items = scholars.filter(s =>
+    (s.full_name || '').toLowerCase().includes(q) ||
+    (s.student_id || '').toLowerCase().includes(q)
+  ).filter(s => !p || s.scholarship_id === p)
+   .filter(s => !st || s.status === st);
 
-  $('scholarRows').innerHTML = items.length ? `
-    <div class="table-wrap">
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Student ID</th><th>Scholar</th><th>Degree / Year</th>
-            <th>Scholarship</th><th>Status</th><th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${items.map(s => `
+  $('scholarRows').innerHTML = items.length
+    ? `<div class="table-wrap">
+        <table class="table">
+          <thead>
             <tr>
-              <td><b>${esc(s.student_id)}</b></td>
-              <td>${esc(s.full_name)}</td>
-              <td>${esc(s.degree_program)} / ${s.year_level}</td>
-              <td>${esc(s.scholarship_programs?.program_name)}</td>
-              <td>${status(s.status)}</td>
-              <td><button class="secondary small" data-edit="${s.id}">Edit</button></td>
+              <th>Student ID</th><th>Scholar</th><th>Degree / Year</th>
+              <th>Scholarship</th><th>Status</th><th>Action</th>
             </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
-  ` : empty('No matching scholars found.');
+          </thead>
+          <tbody>
+            ${items.map(s => `
+              <tr>
+                <td><b>${esc(s.student_id)}</b></td>
+                <td>${esc(s.full_name)}</td>
+                <td>${esc(s.degree_program)} / ${esc(s.year_level)}</td>
+                <td>${esc(s.scholarship_programs?.program_name)}</td>
+                <td>${status(s.status)}</td>
+                <td><button class="secondary small" data-edit="${s.id}">Edit</button></td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`
+    : empty('No matching scholars found.');
 
   $('scholarRows').querySelectorAll('[data-edit]').forEach(b =>
     b.onclick = () => scholarModal(scholars.find(s => s.id === b.dataset.edit))
@@ -260,7 +271,7 @@ function filterScholars() {
 function modal(title, body, onSubmit, submitLabel = 'Save') {
   document.querySelector('.modal-backdrop')?.remove();
 
-  let wrap = document.createElement('div');
+  const wrap = document.createElement('div');
   wrap.className = 'modal-backdrop';
 
   wrap.innerHTML = `
@@ -276,8 +287,7 @@ function modal(title, body, onSubmit, submitLabel = 'Save') {
           <button class="primary" type="submit">${esc(submitLabel)}</button>
         </div>
       </form>
-    </div>
-  `;
+    </div>`;
 
   document.body.appendChild(wrap);
 
@@ -292,7 +302,7 @@ function modal(title, body, onSubmit, submitLabel = 'Save') {
   wrap.querySelector('form').onsubmit = async e => {
     e.preventDefault();
 
-    let b = e.submitter || wrap.querySelector('button[type=submit]');
+    const b = e.submitter || wrap.querySelector('button[type=submit]');
     b.disabled = true;
 
     try {
@@ -310,41 +320,43 @@ function modal(title, body, onSubmit, submitLabel = 'Save') {
 function scholarModal(s) {
   modal(
     s ? 'Edit Scholar' : 'Register Scholar',
-    `
-      <div class="form-grid">
-        <label>Student ID *
-          <input name="student_id" value="${esc(s?.student_id)}" required maxlength="40">
-        </label>
-        <label>Full Name *
-          <input name="full_name" value="${esc(s?.full_name)}" required>
-        </label>
-        <label>Degree Program *
-          <input name="degree_program" value="${esc(s?.degree_program)}" required>
-        </label>
-        <label>Year Level *
-          <select name="year_level" required>
-            ${opt(Array.from({ length: 8 }, (_, i) => [String(i + 1), `Year ${i + 1}`]), String(s?.year_level || 1))}
-          </select>
-        </label>
-        <label>Scholarship Program *
-          <select name="scholarship_id" required>${programOptions(s?.scholarship_id)}</select>
-        </label>
-        <label>Status *
-          <select name="status" required>
-            ${opt(['Active', 'Pending Submission', 'For Verification', 'Compliant', 'With Deficiency', 'Probationary', 'For Renewal', 'Renewed', 'Disqualified'].map(x => [x, x]), s?.status || 'Active')}
-          </select>
-        </label>
-        <label class="wide">Linked scholar login (optional)
-          <select name="user_id">
-            <option value="">Not linked</option>
-            ${opt(window.profileChoices || [], s?.user_id || '')}
-          </select>
-        </label>
-      </div>
-      <p class="subtext">To link a scholar account, the user must sign up first. Only available unlinked scholar accounts appear.</p>
-    `,
+    `<div class="form-grid">
+      <label>Student ID *
+        <input name="student_id" value="${esc(s?.student_id)}" required maxlength="40">
+      </label>
+      <label>Full Name *
+        <input name="full_name" value="${esc(s?.full_name)}" required>
+      </label>
+      <label>Degree Program *
+        <input name="degree_program" value="${esc(s?.degree_program)}" required>
+      </label>
+      <label>Year Level *
+        <select name="year_level" required>
+          ${opt(Array.from({ length: 8 }, (_, i) => [String(i + 1), `Year ${i + 1}`]), String(s?.year_level || 1))}
+        </select>
+      </label>
+      <label>Scholarship Program *
+        <select name="scholarship_id" required>${programOptions(s?.scholarship_id)}</select>
+      </label>
+      <label>Status *
+        <select name="status" required>
+          ${opt([
+            'Active', 'Pending Submission', 'For Verification', 'Compliant',
+            'With Deficiency', 'Probationary', 'For Renewal', 'Renewed',
+            'Disqualified'
+          ].map(x => [x, x]), s?.status || 'Active')}
+        </select>
+      </label>
+      <label class="wide">Linked scholar login (optional)
+        <select name="user_id">
+          <option value="">Not linked</option>
+          ${opt(window.profileChoices || [], s?.user_id || '')}
+        </select>
+      </label>
+    </div>
+    <p class="subtext">To link a scholar account, the user must sign up first. Only available unlinked scholar accounts appear.</p>`,
     async f => {
-      let data = {
+      const data = {
         student_id: get(f, 'student_id'),
         full_name: get(f, 'full_name'),
         degree_program: get(f, 'degree_program'),
@@ -358,7 +370,7 @@ function scholarModal(s) {
         throw Error('Student ID and scholarship are required');
       }
 
-      let r = s
+      const r = s
         ? await db.from('scholars').update(data).eq('id', s.id)
         : await db.from('scholars').insert(data);
 
@@ -371,19 +383,23 @@ function scholarModal(s) {
 }
 
 async function loadProfileChoices(current) {
-  let r = await db.from('profiles').select('id,full_name,role');
+  const r = await db.from('profiles').select('id,full_name,role');
   if (r.error) return;
 
-  let used = new Set(scholars.filter(s => s.user_id !== current).map(s => s.user_id));
+  const used = new Set(
+    scholars.filter(s => s.user_id !== current).map(s => s.user_id)
+  );
 
   window.profileChoices = r.data
     .filter(p => p.role === 'scholar' && !used.has(p.id))
     .map(p => [p.id, p.full_name || p.id]);
 
-  let sel = document.querySelector('.modal select[name=user_id]');
+  const sel = document.querySelector('.modal select[name=user_id]');
 
   if (sel) {
-    sel.innerHTML = '<option value="">Not linked</option>' + opt(window.profileChoices, current || '');
+    sel.innerHTML =
+      '<option value="">Not linked</option>' +
+      opt(window.profileChoices, current || '');
   }
 }
 
@@ -405,25 +421,24 @@ function programPage() {
       <table class="table">
         <thead>
           <tr>
-            <th>Scholarship Program</th><th>Required GWA</th><th>Min. Units</th>
-            <th>Failing Grades</th><th>State</th>${admin() ? '<th>Action</th>' : ''}
+            <th>Scholarship Program</th><th>Required GWA</th>
+            <th>Min. Units</th><th>Failing Grades</th><th>State</th>
+            ${admin() ? '<th>Action</th>' : ''}
           </tr>
         </thead>
         <tbody>
           ${programs.map(p => `
             <tr>
               <td><b>${esc(p.program_name)}</b></td>
-              <td>≤ ${p.required_gwa}</td>
-              <td>${p.min_units}</td>
+              <td>≤ ${esc(p.required_gwa)}</td>
+              <td>${esc(p.min_units)}</td>
               <td>${p.allow_failing_grade ? 'Allowed' : 'Not allowed'}</td>
               <td>${status(p.active ? 'Active' : 'Inactive')}</td>
               ${admin() ? `<td><button class="secondary small" data-program="${p.id}">Edit</button></td>` : ''}
-            </tr>
-          `).join('')}
+            </tr>`).join('')}
         </tbody>
       </table>
-    </div>
-  `;
+    </div>`;
 
   if (admin()) {
     $('addProgram').onclick = () => programModal();
@@ -437,31 +452,29 @@ function programPage() {
 function programModal(p) {
   modal(
     p ? 'Edit Scholarship' : 'Add Scholarship',
-    `
-      <div class="form-grid">
-        <label class="wide">Program Name *
-          <input name="program_name" value="${esc(p?.program_name)}" required>
-        </label>
-        <label>Maximum GWA *
-          <input name="required_gwa" type="number" min="1" max="5" step="0.01" value="${p?.required_gwa ?? 1.75}" required>
-        </label>
-        <label>Minimum Units *
-          <input name="min_units" type="number" min="0" step="1" value="${p?.min_units ?? 18}" required>
-        </label>
-        <label>Allow Failing Grades?
-          <select name="allow_failing_grade">
-            ${opt([['false', 'No'], ['true', 'Yes']], String(p?.allow_failing_grade ?? false))}
-          </select>
-        </label>
-        <label>Active
-          <select name="active">
-            ${opt([['true', 'Yes'], ['false', 'No']], String(p?.active ?? true))}
-          </select>
-        </label>
-      </div>
-    `,
+    `<div class="form-grid">
+      <label class="wide">Program Name *
+        <input name="program_name" value="${esc(p?.program_name)}" required>
+      </label>
+      <label>Maximum GWA *
+        <input name="required_gwa" type="number" min="1" max="5" step="0.01" value="${p?.required_gwa ?? 1.75}" required>
+      </label>
+      <label>Minimum Units *
+        <input name="min_units" type="number" min="0" step="1" value="${p?.min_units ?? 18}" required>
+      </label>
+      <label>Allow Failing Grades?
+        <select name="allow_failing_grade">
+          ${opt([['false', 'No'], ['true', 'Yes']], String(p?.allow_failing_grade ?? false))}
+        </select>
+      </label>
+      <label>Active
+        <select name="active">
+          ${opt([['true', 'Yes'], ['false', 'No']], String(p?.active ?? true))}
+        </select>
+      </label>
+    </div>`,
     async f => {
-      let data = {
+      const data = {
         program_name: get(f, 'program_name'),
         required_gwa: Number(get(f, 'required_gwa')),
         min_units: Number(get(f, 'min_units')),
@@ -469,7 +482,7 @@ function programModal(p) {
         active: get(f, 'active') === 'true'
       };
 
-      let r = p
+      const r = p
         ? await db.from('scholarship_programs').update(data).eq('id', p.id)
         : await db.from('scholarship_programs').insert(data);
 
@@ -500,22 +513,21 @@ function submissionTable(items, actions = true) {
                 <div class="subtext">${esc(s.scholars?.student_id)}</div>
               </td>
               <td>${esc(s.academic_year)}<div class="subtext">${esc(s.semester)}</div></td>
-              <td>${s.gwa}</td>
-              <td>${s.units_enrolled}</td>
+              <td>${esc(s.gwa)}</td>
+              <td>${esc(s.units_enrolled)}</td>
               <td>${status(s.submission_status)}</td>
               <td>${s.evaluation ? status(s.evaluation) : '—'}</td>
               ${actions ? `
                 <td class="actions">
-                  ${staff() && s.submission_status === 'Pending' ? `<button class="primary small" data-verify="${s.id}">Verify</button>` : ''}
+                  ${staff() && s.submission_status === 'Pending'
+                    ? `<button class="primary small" data-verify="${s.id}">Verify</button>`
+                    : ''}
                   <button class="secondary small" data-view="${s.id}">Details</button>
-                </td>
-              ` : ''}
-            </tr>
-          `).join('')}
+                </td>` : ''}
+            </tr>`).join('')}
         </tbody>
       </table>
-    </div>
-  `;
+    </div>`;
 }
 
 function submissionPage() {
@@ -533,8 +545,7 @@ function submissionPage() {
         </select>
       </div>
       <div id="submissionRows"></div>
-    </div>
-  `;
+    </div>`;
 
   $('newSubmission').onclick = submissionModal;
 
@@ -546,10 +557,10 @@ function submissionPage() {
 }
 
 function filterSubmissions() {
-  let q = $('submissionSearch').value.toLowerCase();
-  let st = $('submissionFilter').value;
+  const q = $('submissionSearch').value.toLowerCase();
+  const st = $('submissionFilter').value;
 
-  let items = submissions.filter(s =>
+  const items = submissions.filter(s =>
     (s.scholars?.full_name || '').toLowerCase().includes(q) ||
     (s.scholars?.student_id || '').toLowerCase().includes(q)
   ).filter(s => !st || s.submission_status === st);
@@ -573,38 +584,37 @@ function submissionModal() {
 
   modal(
     'Submit Semester Grades',
-    `
-      <div class="form-grid">
-        <label class="wide">Scholar *
-          <select name="scholar_id" required>${scholarOptions()}</select>
-        </label>
-        <label>Academic Year *
-          <input name="academic_year" placeholder="2026-2027" pattern="[0-9]{4}-[0-9]{4}" required>
-        </label>
-        <label>Semester *
-          <select name="semester" required>
-            ${opt(['1st Semester', '2nd Semester', 'Summer'].map(x => [x, x]))}
-          </select>
-        </label>
-        <label>GWA (1.00–5.00) *
-          <input name="gwa" type="number" min="1" max="5" step="0.01" required>
-        </label>
-        <label>Units Enrolled *
-          <input name="units_enrolled" type="number" min="0" step="1" required>
-        </label>
-        <label>Failed Subjects *
-          <input name="failed_subjects" type="number" min="0" step="1" value="0" required>
-        </label>
-        <label>Incomplete Subjects *
-          <input name="incomplete_subjects" type="number" min="0" step="1" value="0" required>
-        </label>
-      </div>
-      <div class="help">
-        Submission will be saved as Pending. Only staff can verify it and finalize compliance.
-      </div>
-    `,
+    `<div class="form-grid">
+      <label class="wide">Scholar *
+        <select name="scholar_id" required>${scholarOptions()}</select>
+      </label>
+      <label>Academic Year *
+        <input name="academic_year" placeholder="2026-2027" pattern="[0-9]{4}-[0-9]{4}" required>
+      </label>
+      <label>Semester *
+        <select name="semester" required>
+          ${opt(['1st Semester', '2nd Semester', 'Summer'].map(x => [x, x]))}
+        </select>
+      </label>
+      <label>GWA (1.00–5.00) *
+        <input name="gwa" type="number" min="1" max="5" step="0.01" required>
+      </label>
+      <label>Units Enrolled *
+        <input name="units_enrolled" type="number" min="0" step="1" required>
+      </label>
+      <label>Failed Subjects *
+        <input name="failed_subjects" type="number" min="0" step="1" value="0" required>
+      </label>
+      <label>Incomplete Subjects *
+        <input name="incomplete_subjects" type="number" min="0" step="1" value="0" required>
+      </label>
+    </div>
+    <div class="help">
+      Submission will be saved as Pending.
+      Only staff can verify it and finalize compliance.
+    </div>`,
     async f => {
-      let data = {
+      const data = {
         scholar_id: get(f, 'scholar_id'),
         academic_year: get(f, 'academic_year'),
         semester: get(f, 'semester'),
@@ -621,7 +631,7 @@ function submissionModal() {
         throw Error('Academic year must be consecutive, e.g. 2026-2027');
       }
 
-      let r = await db.from('grade_submissions').insert(data);
+      const r = await db.from('grade_submissions').insert(data);
       if (r.error) throw r.error;
 
       toast('Grades submitted as Pending');
@@ -631,30 +641,25 @@ function submissionModal() {
 }
 
 function details(s) {
+  if (!s) return;
+
   modal(
     'Submission Details',
-    `
-      <div class="rule">
-        <b>${esc(s.scholars?.full_name)} · ${esc(s.scholars?.student_id)}</b>
-        <span>${esc(s.academic_year)} · ${esc(s.semester)}</span>
-      </div>
-      <p><b>GWA:</b> ${s.gwa} &nbsp; <b>Units:</b> ${s.units_enrolled}</p>
-      <p><b>Failed subjects:</b> ${s.failed_subjects} &nbsp; <b>Incomplete:</b> ${s.incomplete_subjects}</p>
-      <p><b>Submission:</b> ${status(s.submission_status)} &nbsp; <b>Evaluation:</b> ${s.evaluation ? status(s.evaluation) : 'Not yet evaluated'}</p>
-      ${s.deficiency_notes ? `<div class="notice"><b>Deficiencies:</b> ${esc(s.deficiency_notes)}</div>` : ''}
-      <p class="subtext">
-        Submitted: ${new Date(s.submitted_at).toLocaleString()}
-        ${s.verified_at ? ' · Verified: ' + new Date(s.verified_at).toLocaleString() : ''}
-      </p>
-    `,
+    `<div class="rule">
+      <b>${esc(s.scholars?.full_name)} · ${esc(s.scholars?.student_id)}</b>
+      <span>${esc(s.academic_year)} · ${esc(s.semester)}</span>
+    </div>
+    <p><b>GWA:</b> ${esc(s.gwa)} &nbsp; <b>Units:</b> ${esc(s.units_enrolled)}</p>
+    <p><b>Failed subjects:</b> ${esc(s.failed_subjects)} &nbsp; <b>Incomplete:</b> ${esc(s.incomplete_subjects)}</p>
+    <p><b>Submission:</b> ${status(s.submission_status)} &nbsp; <b>Evaluation:</b> ${s.evaluation ? status(s.evaluation) : 'Not yet evaluated'}</p>
+    ${s.deficiency_notes ? `<div class="notice"><b>Deficiencies:</b> ${esc(s.deficiency_notes)}</div>` : ''}
+    <p class="subtext">
+      Submitted: ${s.submitted_at ? new Date(s.submitted_at).toLocaleString() : '—'}
+      ${s.verified_at ? ' · Verified: ' + new Date(s.verified_at).toLocaleString() : ''}
+    </p>`,
     async () => {},
     'Close'
   );
-
-  document.querySelector('.modal button[type=submit]').onclick = e => {
-    e.preventDefault();
-    document.querySelector('.modal-backdrop').remove();
-  };
 }
 
 async function verify(id) {
@@ -665,7 +670,10 @@ async function verify(id) {
   }
 
   try {
-    let r = await db.rpc('verify_submission', { p_submission_id: id });
+    const r = await db.rpc('verify_submission', {
+      p_submission_id: id
+    });
+
     if (r.error) throw r.error;
 
     toast('Submission verified and compliance evaluated');
@@ -676,7 +684,7 @@ async function verify(id) {
 }
 
 function compliancePage() {
-  let verified = submissions.filter(s => s.submission_status === 'Verified');
+  const verified = submissions.filter(s => s.submission_status === 'Verified');
 
   $('pageContent').innerHTML = `
     <p class="muted">Final evaluations are generated only after authorized verification.</p>
@@ -690,47 +698,50 @@ function compliancePage() {
         </select>
       </div>
       <div id="complianceRows"></div>
-    </div>
-  `;
+    </div>`;
 
   function draw() {
-    let q = $('complianceSearch').value.toLowerCase();
-    let st = $('complianceFilter').value;
+    const q = $('complianceSearch').value.toLowerCase();
+    const st = $('complianceFilter').value;
 
-    let items = verified.filter(s =>
+    const items = verified.filter(s =>
       (s.scholars?.full_name || '').toLowerCase().includes(q) ||
       (s.scholars?.student_id || '').toLowerCase().includes(q)
     ).filter(s => !st || s.evaluation === st);
 
-    $('complianceRows').innerHTML = items.length ? `
-      <div class="table-wrap">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>Scholar</th><th>Program</th><th>Term</th>
-              <th>GWA</th><th>Result</th><th>Deficiencies</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${items.map(s => `
+    $('complianceRows').innerHTML = items.length
+      ? `<div class="table-wrap">
+          <table class="table">
+            <thead>
               <tr>
-                <td>${esc(s.scholars?.full_name)}</td>
-                <td>${esc(s.scholars?.scholarship_programs?.program_name)}</td>
-                <td>${esc(s.academic_year)} / ${esc(s.semester)}</td>
-                <td>${s.gwa}</td>
-                <td>${status(s.evaluation)}</td>
-                <td>${esc(s.deficiency_notes || 'None')}</td>
+                <th>Scholar</th><th>Program</th><th>Term</th>
+                <th>GWA</th><th>Result</th><th>Deficiencies</th>
               </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>
-    ` : empty('No verified evaluations match your search.');
+            </thead>
+            <tbody>
+              ${items.map(s => `
+                <tr>
+                  <td>${esc(s.scholars?.full_name)}</td>
+                  <td>${esc(s.scholars?.scholarship_programs?.program_name)}</td>
+                  <td>${esc(s.academic_year)} / ${esc(s.semester)}</td>
+                  <td>${esc(s.gwa)}</td>
+                  <td>${status(s.evaluation)}</td>
+                  <td>${esc(s.deficiency_notes || 'None')}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`
+      : empty('No verified evaluations match your search.');
   }
 
-  ['complianceSearch', 'complianceFilter'].forEach(id => $(id).oninput = draw);
+  ['complianceSearch', 'complianceFilter'].forEach(id =>
+    $(id).oninput = draw
+  );
+
   draw();
 }
+
+/* Navigation and authentication */
 
 $('nav').querySelectorAll('[data-page]').forEach(b =>
   b.onclick = () => setPage(b.dataset.page)
@@ -743,30 +754,43 @@ $('logout').onclick = async () => {
 
 $('authToggle').onclick = () => {
   signup = !signup;
-  $('authTitle').textContent = signup ? 'Create scholar account' : 'Sign in to your account';
+
+  $('authTitle').textContent = signup
+    ? 'Create scholar account'
+    : 'Sign in to your account';
+
   $('nameField').classList.toggle('hidden', !signup);
   $('signupName').required = signup;
-  $('authSubmit').textContent = signup ? 'Create account' : 'Sign in';
+
+  $('authSubmit').textContent = signup
+    ? 'Create account'
+    : 'Sign in';
+
   $('authSwitchText').textContent = signup
     ? 'Already have an account?'
     : "Don't have an account?";
-  $('authToggle').textContent = signup ? 'Sign in' : 'Create account';
+
+  $('authToggle').textContent = signup
+    ? 'Sign in'
+    : 'Create account';
 };
 
 $('authForm').onsubmit = async e => {
   e.preventDefault();
 
-  if (!db) return error(Error('Configure js/config.js first'));
+  if (!db) {
+    return error(Error('Configure js/config.js first'));
+  }
 
-  let btn = $('authSubmit');
+  const btn = $('authSubmit');
   btn.disabled = true;
 
   try {
-    let email = $('email').value.trim();
-    let password = $('password').value;
+    const email = $('email').value.trim();
+    const password = $('password').value;
 
     if (signup) {
-      let r = await db.auth.signUp({
+      const r = await db.auth.signUp({
         email,
         password,
         options: {
@@ -790,8 +814,13 @@ $('authForm').onsubmit = async e => {
         $('authToggle').click();
       }
     } else {
-      let r = await db.auth.signInWithPassword({ email, password });
+      const r = await db.auth.signInWithPassword({
+        email,
+        password
+      });
+
       if (r.error) throw r.error;
+
       await loadUser();
     }
   } catch (e) {
@@ -801,7 +830,8 @@ $('authForm').onsubmit = async e => {
   }
 };
 
-// Validate Supabase configuration
+/* Supabase configuration */
+
 if (
   !window.APP_CONFIG?.supabaseUrl ||
   !window.APP_CONFIG?.supabaseAnonKey ||
@@ -812,7 +842,6 @@ if (
   return;
 }
 
-// Check Supabase library
 if (!window.supabase) {
   $('setupHint').classList.remove('hidden');
   $('setupHint').textContent =
@@ -820,13 +849,11 @@ if (!window.supabase) {
   return;
 }
 
-// Clean the Supabase URL
 const supabaseUrl = window.APP_CONFIG.supabaseUrl
   .trim()
   .replace(/\/rest\/v1\/?$/i, '')
   .replace(/\/+$/, '');
 
-// Check URL format
 if (
   !supabaseUrl.startsWith('https://') ||
   !supabaseUrl.endsWith('.supabase.co')
@@ -836,9 +863,6 @@ if (
   $('authSubmit').disabled = true;
   return;
 }
-
-// Initialize Supabase client
-console.log('Supabase URL loaded:', supabaseUrl);
 
 db = window.supabase.createClient(
   supabaseUrl,
